@@ -11,13 +11,13 @@ Tired of using `Mapped[int] = mapped_column(...)` over and over? Welcome to **sq
 
 ## 📦 Installation
 
-This library relies strictly on **SQLAlchemy >= 2.0.0** features. Ensure you have the dependencies installed:
+Install directly from **PyPI**:
 
 ```bash
-pip install -r requirements.txt
-# OR
-pip install sqlalchemy>=2.0.0
+pip install sqla-lite
 ```
+
+`sqla-lite` already brings its runtime dependency (`SQLAlchemy >= 2.0.0`).
 
 ---
 

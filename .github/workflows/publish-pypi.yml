@@ -1,8 +1,12 @@
 name: Publish to PyPI
 
 on:
+  push:
+    tags:
+      - "v*"
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -26,13 +30,13 @@ jobs:
       - name: Build distributions
         run: python -m build
 
-      - name: Validate release tag matches package version
+      - name: Validate tag matches package version
         run: |
           TAG="${GITHUB_REF_NAME}"
           TAG="${TAG#v}"
           VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           if [ "$TAG" != "$VERSION" ]; then
-            echo "Release tag ($TAG) does not match project version ($VERSION)."
+            echo "Tag ($TAG) does not match project version ($VERSION)."
             exit 1
           fi
 

@@ -35,6 +35,8 @@ pytest -v
 
 This project publishes to PyPI through GitHub Actions when a tag like `vX.Y.Z` is pushed.
 
+To allow one workflow to create tags and trigger another workflow, configure the repository secret `RELEASE_PUSH_TOKEN` with a Personal Access Token that has permission to write repository contents/workflows.
+
 Basic release flow:
 
 ```bash

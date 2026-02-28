@@ -26,6 +26,8 @@ pytest -v
 
 ## Pull Request Checklist
 
+All changes must be submitted via Pull Request. Direct changes to `main` are not part of the regular contribution flow.
+
 - [ ] Tests pass locally.
 - [ ] New behavior is covered by tests when applicable.
 - [ ] Documentation is updated (`README.md` for usage, this file for contribution flow).
@@ -33,17 +35,15 @@ pytest -v
 
 ## Versioning and PyPI Publish
 
-This project publishes to PyPI through GitHub Actions when a tag like `vX.Y.Z` is pushed.
+Versioning and publishing are automated by GitHub Actions.
+
+When a PR is merged into `main` (or when the version workflow is triggered manually), the action:
+
+1. Determines the next version (or uses the provided manual version input).
+2. Updates version files.
+3. Creates and pushes the release tag.
+4. Triggers the PyPI publish workflow automatically.
 
 To allow one workflow to create tags and trigger another workflow, configure the repository secret `RELEASE_PUSH_TOKEN` with a Personal Access Token that has permission to write repository contents/workflows.
 
-Basic release flow:
-
-```bash
-git checkout main
-git pull
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-Make sure the version in `pyproject.toml` matches the tag (`X.Y.Z`).
+Do not create release tags manually for the normal release flow.

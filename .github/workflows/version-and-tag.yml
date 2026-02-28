@@ -49,7 +49,7 @@ jobs:
               VERSION="1.0.0"
             else
               LAST_VERSION="${LAST_TAG#v}"
-              VERSION="$(python - <<'PY' "$LAST_VERSION"
+              VERSION="$(python - "$LAST_VERSION" <<'PY'
 import re
 import sys
 v = sys.argv[1]
@@ -63,7 +63,7 @@ PY
             fi
           fi
 
-          python - <<'PY' "$VERSION"
+          python - "$VERSION" <<'PY'
 import re
 import sys
 v = sys.argv[1]

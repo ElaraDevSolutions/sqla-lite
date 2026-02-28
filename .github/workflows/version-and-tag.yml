@@ -79,8 +79,8 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          python -c 'from pathlib import Path; import os,re; v=os.environ["VERSION"]; p=Path("pyproject.toml"); t=p.read_text(); n=re.sub(r"(?m)^version\\s*=\\s*\"[^\"]+\"\\s*$", f"version = \"{v}\"", t, count=1); assert n!=t, "Could not update version in pyproject.toml"; p.write_text(n if n.endswith("\\n") else n+"\\n")'
-          python -c 'from pathlib import Path; import os,re; v=os.environ["VERSION"]; p=Path("sqla_lite/__init__.py"); t=p.read_text(); n=re.sub(r"(?m)^__version__\\s*=\\s*\"[^\"]+\"\\s*$", f"__version__ = \"{v}\"", t, count=1); assert n!=t, "Could not update __version__ in sqla_lite/__init__.py"; p.write_text(n if n.endswith("\\n") else n+"\\n")'
+          python -c 'from pathlib import Path; import os,re; v=os.environ["VERSION"]; p=Path("pyproject.toml"); t=p.read_text(); n=re.sub(r"(?m)^version\s*=\s*\"[^\"]+\"\s*$", f"version = \"{v}\"", t, count=1); assert n!=t, "Could not update version in pyproject.toml"; p.write_text(n if n.endswith("\n") else n+"\n")'
+          python -c 'from pathlib import Path; import os,re; v=os.environ["VERSION"]; p=Path("sqla_lite/__init__.py"); t=p.read_text(); n=re.sub(r"(?m)^__version__\s*=\s*\"[^\"]+\"\s*$", f"__version__ = \"{v}\"", t, count=1); assert n!=t, "Could not update __version__ in sqla_lite/__init__.py"; p.write_text(n if n.endswith("\n") else n+"\n")'
 
       - name: Commit and push version bump
         env:

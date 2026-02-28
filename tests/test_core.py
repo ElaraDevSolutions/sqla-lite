@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import create_engine
 import datetime
-from sqla_lite import table, Id, Size, Decimal, DateFormat, repository, configure_database
+from sqla_lite import table, Id, Size, Decimal, DateFormat, ManyToOne, OneToMany, ManyToMany, OneToOne, repository, configure_database
 from sqla_lite.core import Base
 
 # --- ENTITIES FOR TESTING ---
@@ -29,6 +29,52 @@ class MockCompositeRole:
     org_id: int = Id()
     role_name: str = Id(size=20)
     clearance: int
+
+@table("mock_companies")
+class MockCompany:
+    tenant_id: int = Id()
+    code: str = Id(size=20)
+    display_name: str = Size(100)
+
+@table("mock_employees")
+class MockEmployee:
+    id: int = Id()
+    company: MockCompany = ManyToOne(fields=["tenant_id", "code"])
+    full_name: str = Size(100)
+
+@table("mock_profiles")
+class MockProfile:
+    id: int = Id()
+    user_name: str = Size(80)
+
+@table("mock_profile_details")
+class MockProfileDetail:
+    id: int = Id()
+    profile: MockProfile = OneToOne(fields="id")
+    bio: str = Size(120)
+
+@table("mock_rel_parents")
+class MockRelParent:
+    id: int = Id()
+    name: str = Size(80)
+    children: list["MockRelChild"] = OneToMany(mapped_by="parent")
+
+@table("mock_rel_children")
+class MockRelChild:
+    id: int = Id()
+    parent: MockRelParent = ManyToOne(fields="id", back_populates="children")
+    title: str = Size(120)
+
+@table("mock_permissions")
+class MockPermission:
+    id: int = Id()
+    name: str = Size(60)
+
+@table("mock_security_users")
+class MockSecUser:
+    id: int = Id()
+    user_name: str = Size(80)
+    permissions: list[MockPermission] = ManyToMany()
 
 # --- REPOSITORIES FOR TESTING ---
 
@@ -173,3 +219,108 @@ def test_repository_composite_keys(setup_database):
     
     updated_role = repo.get(10, "Admin")
     assert updated_role.clearance == 99
+
+
+def test_many_to_one_composite_fk_mapping(setup_database):
+    mapper = MockEmployee.__mapper__
+    columns = mapper.columns
+
+    assert "company_tenant_id" in columns
+    assert "company_code" in columns
+
+    fk_columns = sorted([col.parent.name for fk in mapper.local_table.foreign_key_constraints for col in fk.elements])
+    assert fk_columns == ["company_code", "company_tenant_id"]
+
+
+def test_one_to_one_mapping_creates_unique_constraint(setup_database):
+    table = MockProfileDetail.__mapper__.local_table
+    unique_sets = [set(constraint.columns.keys()) for constraint in table.constraints if constraint.__class__.__name__ == "UniqueConstraint"]
+    assert {"profile_id"} in unique_sets
+
+
+def test_one_to_many_relationship_is_list(setup_database):
+    relation = MockRelParent.__mapper__.relationships["children"]
+    assert relation.uselist is True
+
+
+def test_many_to_many_relationship_uses_secondary_table(setup_database):
+    relation = MockSecUser.__mapper__.relationships["permissions"]
+    assert relation.secondary is not None
+
+
+def test_many_to_one_accepts_comma_separated_composite_fields(setup_database):
+    @table("mock_employees_csv_fk")
+    class MockEmployeeCsvFk:
+        id: int = Id()
+        company: MockCompany = ManyToOne(fields="tenant_id,code")
+        full_name: str = Size(100)
+
+    mapper = MockEmployeeCsvFk.__mapper__
+    columns = mapper.columns
+
+    assert "company_tenant_id" in columns
+    assert "company_code" in columns
+
+
+def test_many_to_one_nullable_false_marks_generated_fk_columns_not_null(setup_database):
+    @table("mock_non_nullable_employee")
+    class MockNonNullableEmployee:
+        id: int = Id()
+        company: MockCompany = ManyToOne(fields=["tenant_id", "code"], nullable=False)
+
+    mapper = MockNonNullableEmployee.__mapper__
+    assert mapper.columns["company_tenant_id"].nullable is False
+    assert mapper.columns["company_code"].nullable is False
+
+
+def test_back_populates_is_wired_for_many_to_one_and_one_to_many(setup_database):
+    parent_rel = MockRelParent.__mapper__.relationships["children"]
+    child_rel = MockRelChild.__mapper__.relationships["parent"]
+
+    assert parent_rel.back_populates == "parent"
+    assert child_rel.back_populates == "children"
+
+
+def test_one_to_one_relationship_is_scalar(setup_database):
+    relation = MockProfileDetail.__mapper__.relationships["profile"]
+    assert relation.uselist is False
+
+
+def test_many_to_one_raises_for_invalid_target_field_name():
+    with pytest.raises(ValueError, match="target field 'missing_field' does not exist"):
+        @table("mock_invalid_field_fk")
+        class _InvalidFieldFk:
+            id: int = Id()
+            company: MockCompany = ManyToOne(fields="missing_field")
+
+
+def test_many_to_one_raises_for_empty_fields_definition():
+    with pytest.raises(ValueError, match="Relationship fields cannot be empty"):
+        @table("mock_empty_fields_fk")
+        class _EmptyFieldsFk:
+            id: int = Id()
+            company: MockCompany = ManyToOne(fields="  ,   ")
+
+
+def test_many_to_many_raises_for_missing_target_type_annotation():
+    with pytest.raises(ValueError, match="ManyToMany requires a concrete target class annotation"):
+        @table("mock_invalid_many_to_many")
+        class _InvalidManyToMany:
+            id: int = Id()
+            permissions: list = ManyToMany()
+
+
+def test_one_to_one_composite_creates_unique_constraint_for_all_fk_columns(setup_database):
+    @table("mock_external_accounts")
+    class MockExternalAccount:
+        tenant_id: int = Id()
+        external_id: str = Id(size=50)
+
+    @table("mock_external_account_profiles")
+    class MockExternalAccountProfile:
+        id: int = Id()
+        account: MockExternalAccount = OneToOne(fields=["tenant_id", "external_id"])
+
+    table_obj = MockExternalAccountProfile.__mapper__.local_table
+    unique_sets = [set(constraint.columns.keys()) for constraint in table_obj.constraints if constraint.__class__.__name__ == "UniqueConstraint"]
+    assert {"account_tenant_id", "account_external_id"} in unique_sets

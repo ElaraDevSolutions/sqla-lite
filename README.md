@@ -162,6 +162,114 @@ role = repo.get(101, "Software Engineer")
 print(f"Loaded Role for Employee {role.employee_id}!")
 ```
 
+### Relationships (Foreign Keys)
+
+`sqla-lite` now supports relationship markers for all common cases:
+
+- `ManyToOne` (many rows reference one parent)
+- `OneToOne` (unique reference)
+- `OneToMany` (list side of one-to-many)
+- `ManyToMany` (list-to-list through association table)
+
+#### ManyToOne with simple FK
+
+```python
+from sqla_lite import table, Id, Size, Decimal, ManyToOne
+
+@table("products")
+class Product:
+    id: int = Id()
+    title: str = Size(150)
+    price: float = Decimal(precision=10, scale=2)
+
+@table("stocks")
+class Stock:
+    id: int = Id()
+    product: Product = ManyToOne(fields="id")
+```
+
+This creates `stock.product_id` as foreign key to `products.id`.
+
+#### ManyToOne with composite FK
+
+Use `fields` as comma-separated string or list:
+
+```python
+from sqla_lite import table, Id, Size, ManyToOne
+
+@table("companies")
+class Company:
+    tenant_id: int = Id()
+    code: str = Id(size=20)
+    name: str = Size(100)
+
+@table("employees")
+class Employee:
+    id: int = Id()
+    company: Company = ManyToOne(fields=["tenant_id", "code"])
+```
+
+Equivalent form:
+
+```python
+company: Company = ManyToOne(fields="tenant_id,code")
+```
+
+#### OneToOne
+
+```python
+from sqla_lite import table, Id, Size, OneToOne
+
+@table("profiles")
+class Profile:
+    id: int = Id()
+    user_name: str = Size(80)
+
+@table("profile_details")
+class ProfileDetail:
+    id: int = Id()
+    profile: Profile = OneToOne(fields="id")
+```
+
+`OneToOne` applies a unique constraint on the generated FK columns.
+
+#### OneToMany
+
+```python
+from sqla_lite import table, Id, Size, ManyToOne, OneToMany
+
+@table("parents")
+class Parent:
+    id: int = Id()
+    name: str = Size(80)
+    children: list["Child"] = OneToMany(mapped_by="parent")
+
+@table("children")
+class Child:
+    id: int = Id()
+    parent: Parent = ManyToOne(fields="id", back_populates="children")
+    title: str = Size(120)
+```
+
+#### ManyToMany
+
+```python
+from sqla_lite import table, Id, Size, ManyToMany
+
+@table("permissions")
+class Permission:
+    id: int = Id()
+    name: str = Size(60)
+
+@table("users")
+class User:
+    id: int = Id()
+    user_name: str = Size(80)
+    permissions: list[Permission] = ManyToMany()
+```
+
+An association table is generated automatically.
+
 ---
 
 ## 🔥 Extending Repositories

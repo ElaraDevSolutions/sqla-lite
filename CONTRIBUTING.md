@@ -33,7 +33,7 @@ pytest -v
 
 ## Versioning and PyPI Publish
 
-This project publishes to PyPI through GitHub Actions when a tag like `v1.0.0` is pushed.
+This project publishes to PyPI through GitHub Actions when a tag like `vX.Y.Z` is pushed.
 
 Basic release flow:
 

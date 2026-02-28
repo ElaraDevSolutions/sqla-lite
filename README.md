@@ -7,6 +7,8 @@
 
 Tired of using `Mapped[int] = mapped_column(...)` over and over? Welcome to **sqla-lite**.
 
+Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ---
 
 ## 📦 Installation
@@ -183,3 +185,5 @@ adults = repo.find_adults()
 
 ---
 *Created with ❤️. Say goodbye to boilerplate code!*
+
+Support this project on Patreon: https://www.patreon.com/cw/ElaraDevSolutions

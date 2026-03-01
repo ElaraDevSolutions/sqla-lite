@@ -73,6 +73,23 @@ john = repo.get(1)
 print(john.name)
 ```
 
+### Simplified Query Methods (`@query`)
+
+For simple filters, you can avoid manual session boilerplate by using `@query`.
+The decorated method receives a query context already bound to `self.entity_class`.
+
+```python
+from sqla_lite import repository, query
+
+@repository(User)
+class UserRepository:
+    @query
+    def find_adults(self, session):
+        return session.filter(self.entity_class.age >= 18).all()
+```
+
+If you need full control, you can still use `with Session(self.engine) as session:` normally.
+
 ---
 
 ## ⚡ Intermediate Usage
@@ -82,6 +99,7 @@ print(john.name)
 `sqla-lite` understands your annotations and makes reasonable defaults.
 * `str` automatically becomes `String(256)` if no `Size()` is provided.
 * `float` becomes `Float`.
+* `id: str = Id()` automatically generates a UUID when no value is informed.
 * Want highly-precise decimal numbers for currencies? Use the `Decimal` marker!
 
 ```python
@@ -94,6 +112,13 @@ class Product:
     
     # 10 digits in total, 2 fractional decimal numbers -> Numeric(10, 2)
     price: float = Decimal(precision=10, scale=2) 
+```
+
+```python
+@table("uuid_products")
+class UuidProduct:
+    id: str = Id()  # Auto-generated UUID if omitted
+    title: str = Size(150)
 ```
 
 

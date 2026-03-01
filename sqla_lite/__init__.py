@@ -1,4 +1,4 @@
-from .core import table, Id, Size, Decimal, DateFormatMarker as DateFormat, repository, configure_database, ManyToOne, OneToMany, ManyToMany, OneToOne
+from .core import table, Id, Size, Decimal, DateFormatMarker as DateFormat, repository, query, configure_database, ManyToOne, OneToMany, ManyToMany, OneToOne
 
 __version__ = "1.0.6"
 __all__ = [
@@ -12,6 +12,7 @@ __all__ = [
 	"ManyToMany",
 	"OneToOne",
 	"repository",
+	"query",
 	"configure_database",
 	"__version__",
 ]

@@ -2,6 +2,8 @@ from typing import Any, Type, Optional, List, Union, get_origin, get_args, Forwa
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, TypeDecorator, DateTime, Date, ForeignKey, ForeignKeyConstraint, UniqueConstraint, Table, Column
 import datetime
+import uuid
+from functools import wraps
 
 class Base(DeclarativeBase):
     pass
@@ -266,10 +268,15 @@ def table(name: str):
 
             # Is it a primary key?
             if isinstance(attr_val, Id):
-                if attr_type == str and attr_val.size is not None:
-                    # If it is a String and has a explicit size set in the Id
-                    sa_type = String(attr_val.size)
-                attrs[attr_name] = mapped_column(sa_type, primary_key=True)
+                if attr_type == str:
+                    if attr_val.size is not None:
+                        # If it is a String and has a explicit size set in the Id
+                        sa_type = String(attr_val.size)
+                        attrs[attr_name] = mapped_column(sa_type, primary_key=True)
+                    else:
+                        attrs[attr_name] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+                else:
+                    attrs[attr_name] = mapped_column(sa_type, primary_key=True)
             
             # Does it have a specific size?
             elif isinstance(attr_val, Size):
@@ -348,6 +355,12 @@ def configure_database(engine):
     DatabaseContext.engine = engine
 
 
+def query(func):
+    """Marks a repository method to run inside an auto-managed session query context."""
+    setattr(func, "_sqla_lite_query", True)
+    return func
+
+
 def repository(entity_class: Type):
     """
     Class decorator equivalent to Spring's @Repository(Entity).
@@ -386,6 +399,15 @@ def repository(entity_class: Type):
             with Session(self.engine, expire_on_commit=False) as session:
                 return session.query(entity_class).all()
 
+        def _wrap_query_method(method):
+            @wraps(method)
+            def wrapped(self, *args, **kwargs):
+                from sqlalchemy.orm import Session
+                with Session(self.engine, expire_on_commit=False) as session:
+                    query_ctx = session.query(self.entity_class)
+                    return method(self, query_ctx, *args, **kwargs)
+            return wrapped
+
         # Injects the base methods into the Repository class
         setattr(cls, '__init__', __init__)
         setattr(cls, 'save', save)
@@ -393,6 +415,10 @@ def repository(entity_class: Type):
         setattr(cls, 'delete', delete)
         setattr(cls, 'find_all', find_all)
         setattr(cls, 'entity_class', entity_class)
+
+        for attr_name, attr_value in list(cls.__dict__.items()):
+            if callable(attr_value) and getattr(attr_value, "_sqla_lite_query", False):
+                setattr(cls, attr_name, _wrap_query_method(attr_value))
         
         return cls
     return decorator

@@ -11,9 +11,11 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: pypi
 
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -42,6 +44,3 @@ jobs:
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}

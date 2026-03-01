@@ -1,6 +1,6 @@
 from .core import table, Id, Size, Decimal, DateFormatMarker as DateFormat, repository, configure_database, ManyToOne, OneToMany, ManyToMany, OneToOne
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 __all__ = [
 	"table",
 	"Id",

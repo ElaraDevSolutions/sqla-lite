@@ -1,7 +1,8 @@
 import pytest
 from sqlalchemy import create_engine
 import datetime
-from sqla_lite import table, Id, Size, Decimal, DateFormat, ManyToOne, OneToMany, ManyToMany, OneToOne, repository, configure_database
+import uuid
+from sqla_lite import table, Id, Size, Decimal, DateFormat, ManyToOne, OneToMany, ManyToMany, OneToOne, repository, query, configure_database
 from sqla_lite.core import Base
 
 # --- ENTITIES FOR TESTING ---
@@ -17,6 +18,11 @@ class MockProduct:
     # Testing implicit string length logic and implicit float mapping 
     code: str = Id()
     price: float = Decimal(precision=10, scale=2)
+
+@table("mock_uuid_products")
+class MockUUIDProduct:
+    id: str = Id()
+    title: str = Size(120)
 
 @table("mock_events")
 class MockEvent:
@@ -86,6 +92,10 @@ class MockUserRepository:
 class MockProductRepository:
     pass
 
+@repository(MockUUIDProduct)
+class MockUUIDProductRepository:
+    pass
+
 @repository(MockEvent)
 class MockEventRepository:
     pass
@@ -97,6 +107,17 @@ class MockCompositeRoleRepository:
         entity = self.get(org, role)
         entity.clearance = val
         self.save(entity)
+
+
+@repository(MockUser)
+class MockUserQueryRepository:
+    @query
+    def find_adults(self, session):
+        return session.filter(self.entity_class.age >= 18).all()
+
+    @query
+    def find_by_min_age(self, session, min_age):
+        return session.filter(self.entity_class.age >= min_age).all()
 
 
 # --- FIXTURES ---
@@ -178,6 +199,47 @@ def test_decimal_and_string_pk(setup_database):
     
     assert type(fetched.price) != float # SQLAlchemy numeric mapped type verification (usually Decimal here)
     assert float(fetched.price) == 199.99
+
+
+def test_string_id_without_value_is_auto_generated_as_uuid(setup_database):
+    repo = MockUUIDProductRepository()
+
+    product = MockUUIDProduct(title="Keyboard")
+    repo.save(product)
+
+    assert product.id is not None
+    assert isinstance(product.id, str)
+    parsed = uuid.UUID(product.id)
+    assert str(parsed) == product.id
+
+    fetched = repo.get(product.id)
+    assert fetched is not None
+    assert fetched.title == "Keyboard"
+
+
+def test_repository_query_decorator_runs_with_auto_session_context(setup_database):
+    base_repo = MockUserRepository()
+    query_repo = MockUserQueryRepository()
+
+    base_repo.save(MockUser(name="Ana", age=17))
+    base_repo.save(MockUser(name="Bruno", age=18))
+    base_repo.save(MockUser(name="Carla", age=30))
+
+    adults = query_repo.find_adults()
+    adult_names = sorted([person.name for person in adults])
+    assert adult_names == ["Bruno", "Carla"]
+
+
+def test_repository_query_decorator_accepts_extra_parameters(setup_database):
+    base_repo = MockUserRepository()
+    query_repo = MockUserQueryRepository()
+
+    base_repo.save(MockUser(name="Davi", age=19))
+    base_repo.save(MockUser(name="Eva", age=25))
+
+    filtered = query_repo.find_by_min_age(20)
+    assert len(filtered) == 1
+    assert filtered[0].name == "Eva"
 
 
 def test_date_conversion_formats(setup_database):

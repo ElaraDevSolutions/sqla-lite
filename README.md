@@ -7,7 +7,7 @@
 
 Tired of using `Mapped[int] = mapped_column(...)` over and over? Welcome to **sqla-lite**.
 
-Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
+Want to contribute? See [CONTRIBUTING.md](https://github.com/ElaraDevSolutions/sqla-lite/blob/main/CONTRIBUTING.md).
 
 ---
 

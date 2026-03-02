@@ -35,9 +35,9 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/marcos-rosa/sqla-lite"
-Repository = "https://github.com/marcos-rosa/sqla-lite"
-Issues = "https://github.com/marcos-rosa/sqla-lite/issues"
+Homepage = "https://pypi.org/project/sqla-lite/"
+Repository = "https://github.com/ElaraDevSolutions/sqla-lite"
+Issues = "https://github.com/ElaraDevSolutions/sqla-lite/issues"
 
 [tool.setuptools.packages.find]
 include = ["sqla_lite*"]

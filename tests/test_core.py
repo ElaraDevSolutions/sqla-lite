@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import create_engine
 import datetime
 import uuid
+from typing import Optional
 from sqla_lite import table, Id, Size, Decimal, DateFormat, ManyToOne, OneToMany, ManyToMany, OneToOne, repository, query, configure_database
 from sqla_lite.core import Base
 
@@ -29,6 +30,31 @@ class MockEvent:
     id: int = Id()
     created_at: datetime.datetime
     scheduled_date: str = DateFormat("%Y-%m-%d")
+
+@table("mock_nullable_controls")
+class MockNullableControls:
+    id: int = Id()
+    name: str = Size(80, nullable=False)
+    amount: float = Decimal(precision=10, scale=2, nullable=False)
+    completed_at: str = DateFormat("%Y-%m-%d", nullable=False)
+
+@table("mock_optional_fields")
+class MockOptionalFields:
+    id: int = Id()
+    note: Optional[str]
+
+@table("mock_default_controls")
+class MockDefaultControls:
+    id: int = Id()
+    status: str = Size(40, default="PENDING")
+    amount: float = Decimal(precision=10, scale=2, default=0)
+    due_date: str = DateFormat("%Y-%m-%d", default="2026-01-01")
+
+@table("mock_literal_defaults")
+class MockLiteralDefaults:
+    id: int = Id()
+    retries: int = 3
+    title: str = "untitled"
 
 @table("mock_composite_roles")
 class MockCompositeRole:
@@ -262,6 +288,32 @@ def test_date_conversion_formats(setup_database):
     # Custom format marker should read from Sqlite string perfectly parsed into our layout
     assert isinstance(fetched.scheduled_date, str)
     assert fetched.scheduled_date == "2026-12-25"
+
+
+def test_column_markers_nullable_flag_controls_column_nullability(setup_database):
+    mapper = MockNullableControls.__mapper__
+    assert mapper.columns["name"].nullable is False
+    assert mapper.columns["amount"].nullable is False
+    assert mapper.columns["completed_at"].nullable is False
+
+
+def test_optional_annotation_is_accepted_for_scalar_columns(setup_database):
+    mapper = MockOptionalFields.__mapper__
+    assert "note" in mapper.columns
+    assert str(mapper.columns["note"].type) == "VARCHAR(256)"
+
+
+def test_column_markers_default_flag_controls_column_default_value(setup_database):
+    mapper = MockDefaultControls.__mapper__
+    assert mapper.columns["status"].default.arg == "PENDING"
+    assert mapper.columns["amount"].default.arg == 0
+    assert mapper.columns["due_date"].default.arg == "2026-01-01"
+
+
+def test_literal_scalar_assignment_sets_column_default_value(setup_database):
+    mapper = MockLiteralDefaults.__mapper__
+    assert mapper.columns["retries"].default.arg == 3
+    assert mapper.columns["title"].default.arg == "untitled"
 
 
 def test_repository_composite_keys(setup_database):

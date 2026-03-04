@@ -121,6 +121,48 @@ class UuidProduct:
     title: str = Size(150)
 ```
 
+### Nullable Control
+
+By default, non-primary-key columns follow SQLAlchemy defaults. If you want explicit control, pass `nullable=` in column markers:
+
+```python
+@table("customers")
+class Customer:
+    id: int = Id()
+    name: str = Size(120, nullable=False)
+    credit_limit: float = Decimal(precision=10, scale=2, nullable=True)
+    last_contact_at: str = DateFormat("%Y-%m-%d", nullable=True)
+```
+
+Relationship markers also support nullability on generated FK columns:
+
+```python
+company: Company = ManyToOne(fields=["tenant_id", "code"], nullable=False)
+```
+
+### Default Values
+
+You can define a default value directly in marker properties:
+
+```python
+@table("orders")
+class Order:
+    id: int = Id()
+    status: str = Size(40, default="PENDING")
+    total: float = Decimal(precision=10, scale=2, default=0)
+    due_date: str = DateFormat("%Y-%m-%d", default="2026-12-31")
+```
+
+For simple scalar fields, assigning a literal value also sets a default:
+
+```python
+@table("jobs")
+class Job:
+    id: int = Id()
+    retries: int = 3
+    title: str = "untitled"
+```
+
 
 ### Date Handling
 
@@ -300,6 +342,24 @@ An association table is generated automatically.
 ## 🔥 Extending Repositories
 
 Because your Repository is a plain Python Class wrapped by `@repository`, you can implement custom behavior that fits your business logic inside of it. The decorator only injects basic (`save`, `get`, `delete`, `find_all`) methods, leaving you free to query anything else you like via `self.engine`:
+
+If you prefer less boilerplate for read operations, you can also use `@query` here:
+
+```python
+from sqla_lite import repository, query
+
+@repository(User)
+class UserRepository:
+    @query
+    def find_adults(self, session):
+        return session.filter(self.entity_class.age >= 18).all()
+
+    @query
+    def find_by_min_age(self, session, min_age):
+        return session.filter(self.entity_class.age >= min_age).all()
+```
+
+If you need full control (joins, custom session lifecycle, explicit transaction boundaries), regular SQLAlchemy session usage still works:
 
 ```python
 from sqlalchemy.orm import Session

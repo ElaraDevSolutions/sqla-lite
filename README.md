@@ -320,6 +320,24 @@ An association table is generated automatically.
 
 Because your Repository is a plain Python Class wrapped by `@repository`, you can implement custom behavior that fits your business logic inside of it. The decorator only injects basic (`save`, `get`, `delete`, `find_all`) methods, leaving you free to query anything else you like via `self.engine`:
 
+If you prefer less boilerplate for read operations, you can also use `@query` here:
+
+```python
+from sqla_lite import repository, query
+
+@repository(User)
+class UserRepository:
+    @query
+    def find_adults(self, session):
+        return session.filter(self.entity_class.age >= 18).all()
+
+    @query
+    def find_by_min_age(self, session, min_age):
+        return session.filter(self.entity_class.age >= min_age).all()
+```
+
+If you need full control (joins, custom session lifecycle, explicit transaction boundaries), regular SQLAlchemy session usage still works:
+
 ```python
 from sqlalchemy.orm import Session
 

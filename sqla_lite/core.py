@@ -179,6 +179,7 @@ def table(name: str):
     It intercepts the annotated class and returns a compatible SQLAlchemy class.
     """
     def decorator(cls: Type) -> Type[Base]:
+        annotations = getattr(cls, '__annotations__', {})
         attrs = {
             '__tablename__': name,
             '__module__': cls.__module__,
@@ -187,8 +188,15 @@ def table(name: str):
         table_constraints = []
         relationship_specs = []
         
-        # Gets type annotations (e.g., id: int, name: str)
-        annotations = getattr(cls, '__annotations__', {})
+        # Preserve user-defined methods and non-mapped class attributes
+        for key, value in cls.__dict__.items():
+            if key in attrs:
+                continue
+            if key in annotations:
+                continue
+            if key in ('__dict__', '__weakref__', '__slots__', '__annotations__'):
+                continue
+            attrs[key] = value
         
         for attr_name, attr_type in annotations.items():
             # Checks the value assigned to the property

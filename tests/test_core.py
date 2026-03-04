@@ -43,6 +43,19 @@ class MockOptionalFields:
     id: int = Id()
     note: Optional[str]
 
+@table("mock_default_controls")
+class MockDefaultControls:
+    id: int = Id()
+    status: str = Size(40, default="PENDING")
+    amount: float = Decimal(precision=10, scale=2, default=0)
+    due_date: str = DateFormat("%Y-%m-%d", default="2026-01-01")
+
+@table("mock_literal_defaults")
+class MockLiteralDefaults:
+    id: int = Id()
+    retries: int = 3
+    title: str = "untitled"
+
 @table("mock_composite_roles")
 class MockCompositeRole:
     org_id: int = Id()
@@ -288,6 +301,19 @@ def test_optional_annotation_is_accepted_for_scalar_columns(setup_database):
     mapper = MockOptionalFields.__mapper__
     assert "note" in mapper.columns
     assert str(mapper.columns["note"].type) == "VARCHAR(256)"
+
+
+def test_column_markers_default_flag_controls_column_default_value(setup_database):
+    mapper = MockDefaultControls.__mapper__
+    assert mapper.columns["status"].default.arg == "PENDING"
+    assert mapper.columns["amount"].default.arg == 0
+    assert mapper.columns["due_date"].default.arg == "2026-01-01"
+
+
+def test_literal_scalar_assignment_sets_column_default_value(setup_database):
+    mapper = MockLiteralDefaults.__mapper__
+    assert mapper.columns["retries"].default.arg == 3
+    assert mapper.columns["title"].default.arg == "untitled"
 
 
 def test_repository_composite_keys(setup_database):

@@ -140,6 +140,29 @@ Relationship markers also support nullability on generated FK columns:
 company: Company = ManyToOne(fields=["tenant_id", "code"], nullable=False)
 ```
 
+### Default Values
+
+You can define a default value directly in marker properties:
+
+```python
+@table("orders")
+class Order:
+    id: int = Id()
+    status: str = Size(40, default="PENDING")
+    total: float = Decimal(precision=10, scale=2, default=0)
+    due_date: str = DateFormat("%Y-%m-%d", default="2026-12-31")
+```
+
+For simple scalar fields, assigning a literal value also sets a default:
+
+```python
+@table("jobs")
+class Job:
+    id: int = Id()
+    retries: int = 3
+    title: str = "untitled"
+```
+
 
 ### Date Handling
 

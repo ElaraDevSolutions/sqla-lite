@@ -5,6 +5,8 @@ import datetime
 import uuid
 from functools import wraps
 
+_UNSET = object()
+
 class Base(DeclarativeBase):
     pass
 
@@ -15,16 +17,18 @@ class Id:
 
 class Size:
     """Marker for the maximum column size (Equivalent to @Size)"""
-    def __init__(self, size: int = 256, nullable: Optional[bool] = None):
+    def __init__(self, size: int = 256, nullable: Optional[bool] = None, default: Any = _UNSET):
         self.size = size
         self.nullable = nullable
+        self.default = default
 
 class Decimal:
     """Marker for decimal precision and scale (Equivalent to @Decimal)"""
-    def __init__(self, precision: int, scale: int, nullable: Optional[bool] = None):
+    def __init__(self, precision: int, scale: int, nullable: Optional[bool] = None, default: Any = _UNSET):
         self.precision = precision
         self.scale = scale
         self.nullable = nullable
+        self.default = default
 
 class DateFormat(TypeDecorator):
     """
@@ -60,9 +64,10 @@ class DateFormat(TypeDecorator):
 
 class DateFormatMarker:
     """Marker for date format properties (Equivalent to @JsonFormat or @DateTimeFormat)"""
-    def __init__(self, format: str = "%Y-%m-%d %H:%M:%S", nullable: Optional[bool] = None):
+    def __init__(self, format: str = "%Y-%m-%d %H:%M:%S", nullable: Optional[bool] = None, default: Any = _UNSET):
         self.format = format
         self.nullable = nullable
+        self.default = default
 
 class ManyToOne:
     """Marker for many-to-one relationships with support for simple/composite foreign keys."""
@@ -188,6 +193,7 @@ def table(name: str):
         for attr_name, attr_type in annotations.items():
             # Checks the value assigned to the property
             attr_val = getattr(cls, attr_name, None)
+            has_explicit_default = attr_name in cls.__dict__
             resolved_attr_type, is_optional_type = _extract_base_type_and_nullable(attr_type)
 
             if isinstance(attr_val, (ManyToOne, OneToOne, OneToMany, ManyToMany)):
@@ -296,40 +302,50 @@ def table(name: str):
             elif isinstance(attr_val, Size):
                 # When using Size, we can also configure if it's part of a composite primary key
                 is_pk = getattr(attr_val, 'primary_key', False)
+                column_kwargs = {"primary_key": is_pk}
                 if attr_val.nullable is not None:
-                    attrs[attr_name] = mapped_column(String(attr_val.size), primary_key=is_pk, nullable=attr_val.nullable)
-                else:
-                    attrs[attr_name] = mapped_column(String(attr_val.size), primary_key=is_pk)
+                    column_kwargs["nullable"] = attr_val.nullable
+                if attr_val.default is not _UNSET:
+                    column_kwargs["default"] = attr_val.default
+                attrs[attr_name] = mapped_column(String(attr_val.size), **column_kwargs)
                 
             # Is it a decimal with precision?
             elif isinstance(attr_val, Decimal):
                 from sqlalchemy import Numeric
                 is_pk = getattr(attr_val, 'primary_key', False)
+                column_kwargs = {"primary_key": is_pk}
                 if attr_val.nullable is not None:
-                    attrs[attr_name] = mapped_column(Numeric(attr_val.precision, attr_val.scale), primary_key=is_pk, nullable=attr_val.nullable)
-                else:
-                    attrs[attr_name] = mapped_column(Numeric(attr_val.precision, attr_val.scale), primary_key=is_pk)
+                    column_kwargs["nullable"] = attr_val.nullable
+                if attr_val.default is not _UNSET:
+                    column_kwargs["default"] = attr_val.default
+                attrs[attr_name] = mapped_column(Numeric(attr_val.precision, attr_val.scale), **column_kwargs)
                 
             # Is it formatted as Date? (Solves Both: string mapped to datetime or datetime mapped to string)
             elif isinstance(attr_val, DateFormatMarker):
                 is_pk = getattr(attr_val, 'primary_key', False)
+                column_kwargs = {"primary_key": is_pk}
                 if attr_val.nullable is not None:
-                    attrs[attr_name] = mapped_column(DateFormat(format=attr_val.format), primary_key=is_pk, nullable=attr_val.nullable)
-                else:
-                    attrs[attr_name] = mapped_column(DateFormat(format=attr_val.format), primary_key=is_pk)
+                    column_kwargs["nullable"] = attr_val.nullable
+                if attr_val.default is not _UNSET:
+                    column_kwargs["default"] = attr_val.default
+                attrs[attr_name] = mapped_column(DateFormat(format=attr_val.format), **column_kwargs)
                 
             # Normal attribute (e.g., age: int) without a custom initializer
             else:
                 if sa_type:
+                    column_kwargs = {}
                     if is_optional_type:
-                        attrs[attr_name] = mapped_column(sa_type, nullable=True)
-                    else:
-                        attrs[attr_name] = mapped_column(sa_type)
+                        column_kwargs["nullable"] = True
+                    if has_explicit_default:
+                        column_kwargs["default"] = attr_val
+                    attrs[attr_name] = mapped_column(sa_type, **column_kwargs)
                 else:
+                    column_kwargs = {}
                     if is_optional_type:
-                        attrs[attr_name] = mapped_column(nullable=True)
-                    else:
-                        attrs[attr_name] = mapped_column()
+                        column_kwargs["nullable"] = True
+                    if has_explicit_default:
+                        column_kwargs["default"] = attr_val
+                    attrs[attr_name] = mapped_column(**column_kwargs)
 
         if table_constraints:
             attrs["__table_args__"] = tuple(table_constraints)

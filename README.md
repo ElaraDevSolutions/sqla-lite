@@ -121,6 +121,25 @@ class UuidProduct:
     title: str = Size(150)
 ```
 
+### Nullable Control
+
+By default, non-primary-key columns follow SQLAlchemy defaults. If you want explicit control, pass `nullable=` in column markers:
+
+```python
+@table("customers")
+class Customer:
+    id: int = Id()
+    name: str = Size(120, nullable=False)
+    credit_limit: float = Decimal(precision=10, scale=2, nullable=True)
+    last_contact_at: str = DateFormat("%Y-%m-%d", nullable=True)
+```
+
+Relationship markers also support nullability on generated FK columns:
+
+```python
+company: Company = ManyToOne(fields=["tenant_id", "code"], nullable=False)
+```
+
 
 ### Date Handling
 

@@ -15,14 +15,16 @@ class Id:
 
 class Size:
     """Marker for the maximum column size (Equivalent to @Size)"""
-    def __init__(self, size: int = 256):
+    def __init__(self, size: int = 256, nullable: Optional[bool] = None):
         self.size = size
+        self.nullable = nullable
 
 class Decimal:
     """Marker for decimal precision and scale (Equivalent to @Decimal)"""
-    def __init__(self, precision: int, scale: int):
+    def __init__(self, precision: int, scale: int, nullable: Optional[bool] = None):
         self.precision = precision
         self.scale = scale
+        self.nullable = nullable
 
 class DateFormat(TypeDecorator):
     """
@@ -58,8 +60,9 @@ class DateFormat(TypeDecorator):
 
 class DateFormatMarker:
     """Marker for date format properties (Equivalent to @JsonFormat or @DateTimeFormat)"""
-    def __init__(self, format: str = "%Y-%m-%d %H:%M:%S"):
+    def __init__(self, format: str = "%Y-%m-%d %H:%M:%S", nullable: Optional[bool] = None):
         self.format = format
+        self.nullable = nullable
 
 class ManyToOne:
     """Marker for many-to-one relationships with support for simple/composite foreign keys."""
@@ -106,6 +109,16 @@ def _resolve_target_from_annotation(attr_type: Any):
         args = get_args(attr_type)
         return args[0] if args else None
     return attr_type
+
+
+def _extract_base_type_and_nullable(type_hint: Any) -> tuple[Any, bool]:
+    origin = get_origin(type_hint)
+    if origin is Union:
+        args = get_args(type_hint)
+        non_none_args = [arg for arg in args if arg is not type(None)]
+        if len(non_none_args) == 1 and len(non_none_args) != len(args):
+            return non_none_args[0], True
+    return type_hint, False
 
 
 def _resolve_target_name(target: Any) -> Optional[str]:
@@ -175,9 +188,10 @@ def table(name: str):
         for attr_name, attr_type in annotations.items():
             # Checks the value assigned to the property
             attr_val = getattr(cls, attr_name, None)
+            resolved_attr_type, is_optional_type = _extract_base_type_and_nullable(attr_type)
 
             if isinstance(attr_val, (ManyToOne, OneToOne, OneToMany, ManyToMany)):
-                target = _resolve_target_from_annotation(attr_type)
+                target = _resolve_target_from_annotation(resolved_attr_type)
 
                 if isinstance(attr_val, (ManyToOne, OneToOne)):
                     target_name = _resolve_target_name(target)
@@ -254,21 +268,21 @@ def table(name: str):
             
             # Map Python native types to SQLAlchemy types
             sa_type = None
-            if attr_type == int:
+            if resolved_attr_type == int:
                 sa_type = Integer
-            elif attr_type == str:
+            elif resolved_attr_type == str:
                 sa_type = String(256)
-            elif attr_type == float:
+            elif resolved_attr_type == float:
                 from sqlalchemy import Float
                 sa_type = Float
-            elif attr_type == datetime.datetime:
+            elif resolved_attr_type == datetime.datetime:
                 sa_type = DateTime
-            elif attr_type == datetime.date:
+            elif resolved_attr_type == datetime.date:
                 sa_type = Date
 
             # Is it a primary key?
             if isinstance(attr_val, Id):
-                if attr_type == str:
+                if resolved_attr_type == str:
                     if attr_val.size is not None:
                         # If it is a String and has a explicit size set in the Id
                         sa_type = String(attr_val.size)
@@ -282,25 +296,40 @@ def table(name: str):
             elif isinstance(attr_val, Size):
                 # When using Size, we can also configure if it's part of a composite primary key
                 is_pk = getattr(attr_val, 'primary_key', False)
-                attrs[attr_name] = mapped_column(String(attr_val.size), primary_key=is_pk)
+                if attr_val.nullable is not None:
+                    attrs[attr_name] = mapped_column(String(attr_val.size), primary_key=is_pk, nullable=attr_val.nullable)
+                else:
+                    attrs[attr_name] = mapped_column(String(attr_val.size), primary_key=is_pk)
                 
             # Is it a decimal with precision?
             elif isinstance(attr_val, Decimal):
                 from sqlalchemy import Numeric
                 is_pk = getattr(attr_val, 'primary_key', False)
-                attrs[attr_name] = mapped_column(Numeric(attr_val.precision, attr_val.scale), primary_key=is_pk)
+                if attr_val.nullable is not None:
+                    attrs[attr_name] = mapped_column(Numeric(attr_val.precision, attr_val.scale), primary_key=is_pk, nullable=attr_val.nullable)
+                else:
+                    attrs[attr_name] = mapped_column(Numeric(attr_val.precision, attr_val.scale), primary_key=is_pk)
                 
             # Is it formatted as Date? (Solves Both: string mapped to datetime or datetime mapped to string)
             elif isinstance(attr_val, DateFormatMarker):
                 is_pk = getattr(attr_val, 'primary_key', False)
-                attrs[attr_name] = mapped_column(DateFormat(format=attr_val.format), primary_key=is_pk)
+                if attr_val.nullable is not None:
+                    attrs[attr_name] = mapped_column(DateFormat(format=attr_val.format), primary_key=is_pk, nullable=attr_val.nullable)
+                else:
+                    attrs[attr_name] = mapped_column(DateFormat(format=attr_val.format), primary_key=is_pk)
                 
             # Normal attribute (e.g., age: int) without a custom initializer
             else:
                 if sa_type:
-                    attrs[attr_name] = mapped_column(sa_type)
+                    if is_optional_type:
+                        attrs[attr_name] = mapped_column(sa_type, nullable=True)
+                    else:
+                        attrs[attr_name] = mapped_column(sa_type)
                 else:
-                    attrs[attr_name] = mapped_column()
+                    if is_optional_type:
+                        attrs[attr_name] = mapped_column(nullable=True)
+                    else:
+                        attrs[attr_name] = mapped_column()
 
         if table_constraints:
             attrs["__table_args__"] = tuple(table_constraints)

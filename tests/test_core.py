@@ -316,6 +316,34 @@ def test_literal_scalar_assignment_sets_column_default_value(setup_database):
     assert mapper.columns["title"].default.arg == "untitled"
 
 
+def test_table_preserves_custom_instance_methods():
+    @table("mock_users_with_methods")
+    class MockUserWithMethods:
+        id: int = Id()
+        name: str = Size(100)
+        age: int
+
+        def display_name(self):
+            return f"{self.name} ({self.age})"
+
+    entity = MockUserWithMethods(name="Marcos", age=25)
+    assert entity.display_name() == "Marcos (25)"
+
+
+def test_table_preserves_custom_str_override():
+    @table("mock_users_with_str")
+    class MockUserWithStr:
+        id: int = Id()
+        name: str = Size(100)
+        age: int
+
+        def __str__(self):
+            return f"User(id={self.id}, name={self.name}, age={self.age})"
+
+    entity = MockUserWithStr(name="Marcos", age=25)
+    assert str(entity) == "User(id=None, name=Marcos, age=25)"
+
+
 def test_repository_composite_keys(setup_database):
     """Tests handling tuples properly inside repository's dynamically mapped .get() arguments."""
     repo = MockCompositeRoleRepository()

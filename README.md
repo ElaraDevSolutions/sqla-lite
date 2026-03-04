@@ -1,11 +1,14 @@
 # sqla-lite
+A lightweight declarative layer on top of SQLAlchemy that eliminates boilerplate and improves readability.
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0%2B-red.svg)](https://www.sqlalchemy.org/)
 
-**sqla-lite** is a lightweight, declarative, and elegant wrapper over **SQLAlchemy**. It is designed to bring the joy and simplicity of frameworks like **Java Spring Boot / JPA** to Python, enabling you to define entities and repositories without the boilerplate of manually mapping declarative bases and session handlers.
+**SQLAlchemy** is powerful — but model definitions can become verbose and repetitive.
 
-Tired of using `Mapped[int] = mapped_column(...)` over and over? Welcome to **sqla-lite**.
+**sqla-lite** provides a minimal declarative layer that reduces boilerplate, improves readability, and keeps your models clean and maintainable.
+
+No magic. No heavy abstraction. Just less noise.
 
 Want to contribute? See [CONTRIBUTING.md](https://github.com/ElaraDevSolutions/sqla-lite/blob/main/CONTRIBUTING.md).
 

@@ -1,4 +1,4 @@
-from .core import table, Id, Size, Decimal, DateFormatMarker as DateFormat, repository, query, configure_database, ManyToOne, OneToMany, ManyToMany, OneToOne
+from .core import table, Id, Size, Decimal, DateFormatMarker as DateFormat, Unique, ForeignKey, Check, Index, repository, query, configure_database, ManyToOne, OneToMany, ManyToMany, OneToOne
 
 __version__ = "1.0.10"
 __all__ = [
@@ -7,6 +7,10 @@ __all__ = [
 	"Size",
 	"Decimal",
 	"DateFormat",
+	"Unique",
+	"ForeignKey",
+	"Check",
+	"Index",
 	"ManyToOne",
 	"OneToMany",
 	"ManyToMany",

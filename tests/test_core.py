@@ -1,9 +1,9 @@
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, UniqueConstraint
 import datetime
 import uuid
 from typing import Optional
-from sqla_lite import table, Id, Size, Decimal, DateFormat, ManyToOne, OneToMany, ManyToMany, OneToOne, repository, query, configure_database
+from sqla_lite import table, Id, Size, Decimal, DateFormat, Unique, ForeignKey, Check, Index, ManyToOne, OneToMany, ManyToMany, OneToOne, repository, query, configure_database
 from sqla_lite.core import Base
 
 # --- ENTITIES FOR TESTING ---
@@ -477,3 +477,113 @@ def test_one_to_one_composite_creates_unique_constraint_for_all_fk_columns(setup
     table_obj = MockExternalAccountProfile.__mapper__.local_table
     unique_sets = [set(constraint.columns.keys()) for constraint in table_obj.constraints if constraint.__class__.__name__ == "UniqueConstraint"]
     assert {"account_tenant_id", "account_external_id"} in unique_sets
+
+
+def test_table_constraints_parameter_creates_unique_constraint(setup_database):
+    @table(
+        "mock_memberships_with_decorator_constraint",
+        constraints=[Unique("company_tenant_id", "full_name", name="uq_mock_memberships_company_name")],
+    )
+    class MockMembershipWithDecoratorConstraint:
+        id: int = Id()
+        company: MockCompany = ManyToOne(fields="tenant_id")
+        full_name: str = Size(100)
+
+    table_obj = MockMembershipWithDecoratorConstraint.__mapper__.local_table
+    unique_sets = [set(constraint.columns.keys()) for constraint in table_obj.constraints if constraint.__class__.__name__ == "UniqueConstraint"]
+    assert {"company_tenant_id", "full_name"} in unique_sets
+
+
+def test_table_preserves_existing_table_args_when_relationship_adds_constraints(setup_database):
+    @table("mock_memberships_with_existing_table_args")
+    class MockMembershipWithExistingTableArgs:
+        id: int = Id()
+        company: MockCompany = ManyToOne(fields="tenant_id")
+        full_name: str = Size(100)
+
+        __table_args__ = (
+            UniqueConstraint("company_tenant_id", "full_name", name="uq_mock_memberships_existing_company_name"),
+        )
+
+    table_obj = MockMembershipWithExistingTableArgs.__mapper__.local_table
+    unique_sets = [set(constraint.columns.keys()) for constraint in table_obj.constraints if constraint.__class__.__name__ == "UniqueConstraint"]
+    assert {"company_tenant_id", "full_name"} in unique_sets
+    assert len(table_obj.foreign_key_constraints) == 1
+
+
+def test_table_constraints_parameter_creates_foreign_key_constraint(setup_database):
+    @table(
+        "mock_memberships_with_decorator_fk_constraint",
+        constraints=[
+            ForeignKey(
+                "company_tenant_id",
+                "mock_companies.tenant_id",
+                name="fk_mock_memberships_company",
+            )
+        ],
+    )
+    class MockMembershipWithDecoratorForeignKeyConstraint:
+        id: int = Id()
+        company_tenant_id: int
+
+    table_obj = MockMembershipWithDecoratorForeignKeyConstraint.__mapper__.local_table
+    fk_constraints = list(table_obj.foreign_key_constraints)
+    assert len(fk_constraints) == 1
+
+    fk = fk_constraints[0]
+    assert fk.name == "fk_mock_memberships_company"
+    local_cols = sorted([element.parent.name for element in fk.elements])
+    remote_cols = sorted([element.target_fullname for element in fk.elements])
+    assert local_cols == ["company_tenant_id"]
+    assert remote_cols == ["mock_companies.tenant_id"]
+
+
+def test_table_constraints_parameter_creates_check_constraint(setup_database):
+    @table(
+        "mock_jobs_with_check_constraint",
+        constraints=[Check("retries >= 0", name="ck_mock_jobs_retries_non_negative")],
+    )
+    class MockJobWithCheckConstraint:
+        id: int = Id()
+        retries: int
+
+    table_obj = MockJobWithCheckConstraint.__mapper__.local_table
+    check_constraints = [
+        c for c in table_obj.constraints if c.__class__.__name__ == "CheckConstraint"
+    ]
+    assert len(check_constraints) == 1
+    assert check_constraints[0].name == "ck_mock_jobs_retries_non_negative"
+
+
+def test_table_constraints_parameter_creates_index(setup_database):
+    @table(
+        "mock_users_with_index",
+        constraints=[Index("name", "age", name="ix_mock_users_name_age")],
+    )
+    class MockUserWithIndex:
+        id: int = Id()
+        name: str = Size(80)
+        age: int
+
+    table_obj = MockUserWithIndex.__mapper__.local_table
+    index_names = sorted([idx.name for idx in table_obj.indexes])
+    assert "ix_mock_users_name_age" in index_names
+
+
+def test_one_to_many_accepts_concrete_class_annotation_with_late_mapping_resolution(setup_database):
+    class RawLateChild:
+        pass
+
+    @table("mock_late_parents")
+    class MockLateParent:
+        id: int = Id()
+        children: list[RawLateChild] = OneToMany(mapped_by="parent")
+
+    @table("mock_late_children")
+    class RawLateChild:
+        id: int = Id()
+        parent: MockLateParent = ManyToOne(fields="id", back_populates="children")
+
+    relation = MockLateParent.__mapper__.relationships["children"]
+    assert relation.uselist is True
+    assert relation.mapper.class_.__name__ == "RawLateChild"

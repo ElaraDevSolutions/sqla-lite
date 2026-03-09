@@ -56,6 +56,11 @@ class MockLiteralDefaults:
     retries: int = 3
     title: str = "untitled"
 
+@table("mock_bool_defaults")
+class MockBoolDefaults:
+    id: int = Id()
+    is_admin: bool = False
+
 @table("mock_composite_roles")
 class MockCompositeRole:
     org_id: int = Id()
@@ -314,6 +319,12 @@ def test_literal_scalar_assignment_sets_column_default_value(setup_database):
     mapper = MockLiteralDefaults.__mapper__
     assert mapper.columns["retries"].default.arg == 3
     assert mapper.columns["title"].default.arg == "untitled"
+
+
+def test_bool_annotation_maps_to_boolean_column_with_literal_default(setup_database):
+    mapper = MockBoolDefaults.__mapper__
+    assert str(mapper.columns["is_admin"].type) == "BOOLEAN"
+    assert mapper.columns["is_admin"].default.arg is False
 
 
 def test_table_preserves_custom_instance_methods():

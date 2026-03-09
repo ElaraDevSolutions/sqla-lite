@@ -1,6 +1,6 @@
 from typing import Any, Type, Optional, List, Union, get_origin, get_args, ForwardRef
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, TypeDecorator, DateTime, Date, ForeignKey, ForeignKeyConstraint, UniqueConstraint, Table, Column
+from sqlalchemy import Integer, String, Boolean, TypeDecorator, DateTime, Date, ForeignKey, ForeignKeyConstraint, UniqueConstraint, Table, Column
 import datetime
 import uuid
 from functools import wraps
@@ -284,6 +284,8 @@ def table(name: str):
             sa_type = None
             if resolved_attr_type == int:
                 sa_type = Integer
+            elif resolved_attr_type == bool:
+                sa_type = Boolean
             elif resolved_attr_type == str:
                 sa_type = String(256)
             elif resolved_attr_type == float:

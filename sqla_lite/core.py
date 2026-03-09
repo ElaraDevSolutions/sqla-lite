@@ -1,6 +1,6 @@
 from typing import Any, Type, Optional, List, Union, get_origin, get_args, ForwardRef
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, TypeDecorator, DateTime, Date, ForeignKey, ForeignKeyConstraint, UniqueConstraint, Table, Column
+from sqlalchemy import Integer, String, Boolean, TypeDecorator, DateTime, Date, ForeignKey as SAForeignKey, ForeignKeyConstraint as SAForeignKeyConstraint, UniqueConstraint as SAUniqueConstraint, CheckConstraint as SACheckConstraint, Index as SAIndex, Table, Column
 import datetime
 import uuid
 from functools import wraps
@@ -68,6 +68,51 @@ class DateFormatMarker:
         self.format = format
         self.nullable = nullable
         self.default = default
+
+
+class Unique:
+    """Marker for unique constraints declared in @table(..., constraints=[...])."""
+    def __init__(self, *fields: str, name: Optional[str] = None):
+        if not fields:
+            raise ValueError("Unique requires at least one field.")
+        self.fields = fields
+        self.name = name
+
+
+class ForeignKey:
+    """Marker for FK constraints declared in @table(..., constraints=[...])."""
+    def __init__(
+        self,
+        local_fields: Union[str, List[str]],
+        remote_fields: Union[str, List[str]],
+        name: Optional[str] = None,
+        ondelete: Optional[str] = None,
+        onupdate: Optional[str] = None,
+    ):
+        self.local_fields = local_fields
+        self.remote_fields = remote_fields
+        self.name = name
+        self.ondelete = ondelete
+        self.onupdate = onupdate
+
+
+class Check:
+    """Marker for CHECK constraints declared in @table(..., constraints=[...])."""
+    def __init__(self, expression: str, name: Optional[str] = None):
+        if not expression or not str(expression).strip():
+            raise ValueError("Check requires a non-empty expression.")
+        self.expression = expression
+        self.name = name
+
+
+class Index:
+    """Marker for index declarations in @table(..., constraints=[...])."""
+    def __init__(self, *fields: str, name: Optional[str] = None, unique: bool = False):
+        if not fields:
+            raise ValueError("Index requires at least one field.")
+        self.fields = fields
+        self.name = name
+        self.unique = unique
 
 class ManyToOne:
     """Marker for many-to-one relationships with support for simple/composite foreign keys."""
@@ -155,7 +200,7 @@ def _build_secondary_table(left_cls: Type, right_cls: Type, custom_name: Optiona
             Column(
                 f"{left_table.name}_{pk_col.name}",
                 pk_col.type,
-                ForeignKey(f"{left_table.name}.{pk_col.name}"),
+                SAForeignKey(f"{left_table.name}.{pk_col.name}"),
                 primary_key=True,
             )
         )
@@ -165,7 +210,7 @@ def _build_secondary_table(left_cls: Type, right_cls: Type, custom_name: Optiona
             Column(
                 f"{right_table.name}_{pk_col.name}",
                 pk_col.type,
-                ForeignKey(f"{right_table.name}.{pk_col.name}"),
+                SAForeignKey(f"{right_table.name}.{pk_col.name}"),
                 primary_key=True,
             )
         )
@@ -174,12 +219,63 @@ def _build_secondary_table(left_cls: Type, right_cls: Type, custom_name: Optiona
     _association_tables[table_name] = association
     return association
 
-def table(name: str):
+
+def _coerce_table_constraints(constraints: Optional[List[Any]]) -> list[Any]:
+    if not constraints:
+        return []
+
+    coerced = []
+    for constraint in constraints:
+        if isinstance(constraint, Unique):
+            coerced.append(SAUniqueConstraint(*constraint.fields, name=constraint.name))
+        elif isinstance(constraint, ForeignKey):
+            local_cols = _normalize_fields(constraint.local_fields)
+            remote_cols = _normalize_fields(constraint.remote_fields)
+            if len(local_cols) != len(remote_cols):
+                raise ValueError("ForeignKey local_fields and remote_fields must have the same number of columns.")
+            coerced.append(
+                SAForeignKeyConstraint(
+                    local_cols,
+                    remote_cols,
+                    name=constraint.name,
+                    ondelete=constraint.ondelete,
+                    onupdate=constraint.onupdate,
+                )
+            )
+        elif isinstance(constraint, Check):
+            coerced.append(SACheckConstraint(constraint.expression, name=constraint.name))
+        elif isinstance(constraint, Index):
+            index_name = constraint.name or f"ix_{'_'.join(constraint.fields)}"
+            coerced.append(SAIndex(index_name, *constraint.fields, unique=constraint.unique))
+        else:
+            coerced.append(constraint)
+    return coerced
+
+
+def _merge_table_args(existing_table_args: Any, generated_constraints: list[Any]) -> Any:
+    if not generated_constraints:
+        return existing_table_args
+
+    if existing_table_args is None:
+        return tuple(generated_constraints)
+
+    if isinstance(existing_table_args, dict):
+        return tuple(generated_constraints) + (existing_table_args,)
+
+    if isinstance(existing_table_args, tuple):
+        if existing_table_args and isinstance(existing_table_args[-1], dict):
+            return tuple(existing_table_args[:-1]) + tuple(generated_constraints) + (existing_table_args[-1],)
+        return tuple(existing_table_args) + tuple(generated_constraints)
+
+    return (existing_table_args,) + tuple(generated_constraints)
+
+def table(name: str, constraints: Optional[List[Any]] = None):
     """
     It intercepts the annotated class and returns a compatible SQLAlchemy class.
     """
     def decorator(cls: Type) -> Type[Base]:
         annotations = getattr(cls, '__annotations__', {})
+        user_constraints = _coerce_table_constraints(constraints)
         attrs = {
             '__tablename__': name,
             '__module__': cls.__module__,
@@ -236,14 +332,14 @@ def table(name: str):
                         attrs[local_col_name] = mapped_column(remote_col.type, nullable=attr_val.nullable)
 
                     table_constraints.append(
-                        ForeignKeyConstraint(
+                        SAForeignKeyConstraint(
                             local_cols,
                             [f"{target_table.name}.{col_name}" for col_name in remote_cols],
                         )
                     )
 
                     if isinstance(attr_val, OneToOne):
-                        table_constraints.append(UniqueConstraint(*local_cols))
+                        table_constraints.append(SAUniqueConstraint(*local_cols))
 
                     relationship_specs.append(
                         {
@@ -256,12 +352,15 @@ def table(name: str):
                     )
 
                 elif isinstance(attr_val, OneToMany):
+                    # Prefer target name so SQLAlchemy can resolve lazily from registry.
+                    # This avoids failures when a concrete class object exists but is not yet mapped
+                    # due to import timing/circular references.
                     relationship_specs.append(
                         {
                             "kind": "one_to_many",
                             "attr_name": attr_name,
                             "target": target,
-                            "target_name": _resolve_target_name(target),
+                            "target_name": _resolve_target_name(target) or getattr(target, "__name__", None),
                             "mapped_by": attr_val.mapped_by,
                         }
                     )
@@ -284,6 +383,8 @@ def table(name: str):
             sa_type = None
             if resolved_attr_type == int:
                 sa_type = Integer
+            elif resolved_attr_type == bool:
+                sa_type = Boolean
             elif resolved_attr_type == str:
                 sa_type = String(256)
             elif resolved_attr_type == float:
@@ -355,8 +456,8 @@ def table(name: str):
                         column_kwargs["default"] = attr_val
                     attrs[attr_name] = mapped_column(**column_kwargs)
 
-        if table_constraints:
-            attrs["__table_args__"] = tuple(table_constraints)
+        combined_constraints = table_constraints + user_constraints
+        attrs["__table_args__"] = _merge_table_args(attrs.get("__table_args__"), combined_constraints)
         
         # Creates a new class derived from SQLAlchemy DeclarativeBase
         sqla_class = type(cls.__name__, (Base,), attrs)
@@ -375,7 +476,7 @@ def table(name: str):
                 setattr(sqla_class, spec["attr_name"], relationship(spec["target"], **relation_kwargs))
 
             elif kind == "one_to_many":
-                target = spec["target_name"] if isinstance(spec["target"], ForwardRef) else (spec["target"] or spec["target_name"])
+                target = spec["target_name"] or spec["target"]
                 relation_kwargs = {}
                 if spec["mapped_by"]:
                     relation_kwargs["back_populates"] = spec["mapped_by"]

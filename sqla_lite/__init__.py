@@ -1,6 +1,6 @@
 from .core import table, Id, Size, Decimal, DateFormatMarker as DateFormat, Unique, ForeignKey, Check, Index, repository, query, configure_database, ManyToOne, OneToMany, ManyToMany, OneToOne
 
-__version__ = "1.0.10"
+__version__ = "1.0.11"
 __all__ = [
 	"table",
 	"Id",

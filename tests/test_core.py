@@ -587,3 +587,39 @@ def test_one_to_many_accepts_concrete_class_annotation_with_late_mapping_resolut
     relation = MockLateParent.__mapper__.relationships["children"]
     assert relation.uselist is True
     assert relation.mapper.class_.__name__ == "RawLateChild"
+
+
+def test_generated_class_has_no_raw_annotations():
+    """Regression: @table must not leak plain Python type hints into the generated
+    SQLAlchemy class.  In Python 3.14+ the PEP-649 __annotate__ function from the
+    original class could be copied into attrs, causing SQLAlchemy 2.x to raise
+    MappedAnnotationError or NameError when it tried to evaluate those hints."""
+    annotations = MockRelParent.__annotations__
+    assert annotations == {}, (
+        f"Generated class should have no raw annotations, got: {annotations}"
+    )
+
+
+def test_generated_class_with_forward_ref_one_to_many_is_functional(setup_database):
+    """Regression: OneToMany with a string forward reference (list['ChildClass'])
+    must not cause NameError when SQLAlchemy 2.x tries to de-stringify it."""
+    repo_parent = type("Repo", (), {})  # dummy
+    from sqla_lite import repository
+
+    @repository(MockRelParent)
+    class _ParentRepo:
+        pass
+
+    @repository(MockRelChild)
+    class _ChildRepo:
+        pass
+
+    parent = MockRelParent(name="Dad")
+    _ParentRepo().save(parent)
+
+    child = MockRelChild(title="Kid", parent_id=parent.id)
+    _ChildRepo().save(child)
+
+    fetched = _ParentRepo().get(parent.id)
+    assert fetched is not None
+    assert fetched.name == "Dad"

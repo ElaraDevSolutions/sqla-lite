@@ -8,7 +8,10 @@ from functools import wraps
 _UNSET = object()
 
 class Base(DeclarativeBase):
-    pass
+    # Allow legacy-style annotations (e.g. `id: int`) that don't use Mapped[].
+    # SQLAlchemy 2.x requires this flag when type hints are plain Python types
+    # instead of the new Mapped[...] generic form.
+    __allow_unmapped__ = True
 
 class Id:
     """Marker for primary key (@Id)"""
@@ -290,9 +293,16 @@ def table(name: str, constraints: Optional[List[Any]] = None):
                 continue
             if key in annotations:
                 continue
-            if key in ('__dict__', '__weakref__', '__slots__', '__annotations__'):
+            if key in ('__dict__', '__weakref__', '__slots__', '__annotations__',
+                       '__annotate__'):
                 continue
             attrs[key] = value
+
+        # Explicitly clear annotations on the generated class so SQLAlchemy
+        # never sees the user's raw type hints (e.g. `id: int`).
+        # In Python 3.14+, __annotate__ (PEP 649) from the original class
+        # could otherwise leak into the dynamically created subclass.
+        attrs['__annotations__'] = {}
         
         for attr_name, attr_type in annotations.items():
             # Checks the value assigned to the property
